@@ -235,7 +235,10 @@ def scan_emails():
         }
         
     except Exception as e:
-        scan_status['error'] = str(e)
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"ERROR: {error_detail}")  # ログに出力
+        scan_status['error'] = str(e)    
     
     finally:
         scan_status['running'] = False

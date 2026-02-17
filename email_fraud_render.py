@@ -9,8 +9,15 @@ from flask import Flask, render_template_string, jsonify, request
 from datetime import datetime
 import json
 import os
+import requests
 
 app = Flask(__name__)
+
+# スキャンリクエストフラグ
+scan_request_flag = {
+    'requested': False,
+    'request_time': None
+}
 
 # 最新のスキャン結果を保持
 latest_result = {
@@ -181,6 +188,12 @@ HTML_TEMPLATE = '''
                 🔄 更新
             </button>
             
+            {% if acer_webhook_enabled %}
+            <button class="refresh-btn" onclick="requestScan()" id="scanBtn" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                📧 今すぐスキャン
+            </button>
+            {% endif %}
+            
             <div id="result">
                 {% if data.scan_date %}
                     {% if data.total_suspicious == 0 %}
@@ -232,13 +245,87 @@ HTML_TEMPLATE = '''
             </div>
         </div>
     </div>
+    
+    <script>
+        function requestScan() {
+            const btn = document.getElementById('scanBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '⏳ スキャン中...';
+            }
+            
+            fetch('/api/request_scan', {method: 'POST'})
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = '📧 今すぐスキャン';
+                    }
+                    // 10秒後に自動更新
+                    setTimeout(() => location.reload(), 10000);
+                })
+                .catch(error => {
+                    alert('エラーが発生しました: ' + error);
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.textContent = '📧 今すぐスキャン';
+                    }
+                });
+        }
+    </script>
 </body>
 </html>
 '''
 
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE, data=latest_result)
+    return render_template_string(HTML_TEMPLATE, data=latest_result, acer_webhook_enabled=True)
+
+@app.route('/api/request_scan', methods=['POST'])
+def request_scan():
+    """iPhoneからのスキャンリクエストを受付（フラグを立てる）"""
+    global scan_request_flag
+    
+    try:
+        scan_request_flag['requested'] = True
+        scan_request_flag['request_time'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        print(f"✓ スキャンリクエストを受付: {scan_request_flag['request_time']}")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'スキャンリクエストを受け付けました。1分以内に実行されます。'
+        }), 200
+        
+    except Exception as e:
+        print(f"リクエスト受付エラー: {e}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/check_flag', methods=['GET'])
+def check_flag():
+    """Acerからのフラグ確認（ポーリング用）"""
+    global scan_request_flag
+    
+    if scan_request_flag['requested']:
+        # フラグをクリア
+        scan_request_flag['requested'] = False
+        request_time = scan_request_flag['request_time']
+        scan_request_flag['request_time'] = None
+        
+        print(f"✓ Acerにスキャン指示を送信")
+        
+        return jsonify({
+            'scan_requested': True,
+            'request_time': request_time
+        }), 200
+    else:
+        return jsonify({
+            'scan_requested': False
+        }), 200
 
 @app.route('/api/update', methods=['POST'])
 def update_result():

@@ -9,7 +9,6 @@ from flask import Flask, render_template_string, jsonify, request
 from datetime import datetime
 import json
 import os
-import requests
 
 app = Flask(__name__)
 

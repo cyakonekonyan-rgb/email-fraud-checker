@@ -249,21 +249,23 @@ HTML_TEMPLATE = '''
     <script>
         function requestScan() {
             const btn = document.getElementById('scanBtn');
+            const resultDiv = document.getElementById('result');
+            
             if (btn) {
                 btn.disabled = true;
                 btn.textContent = '⏳ スキャン中...';
             }
             
+            // 結果を非表示にする
+            if (resultDiv) {
+                resultDiv.innerHTML = '<div class="status warning">⏳ スキャン中です。しばらくお待ちください...</div>';
+            }
+            
             fetch('/api/request_scan', {method: 'POST'})
                 .then(response => response.json())
                 .then(data => {
-                    alert(data.message);
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.textContent = '📧 今すぐスキャン';
-                    }
-                    // 10秒後に自動更新
-                    setTimeout(() => location.reload(), 10000);
+                    // スキャン完了まで待機（60秒後に自動更新）
+                    setTimeout(() => location.reload(), 60000);
                 })
                 .catch(error => {
                     alert('エラーが発生しました: ' + error);
@@ -271,6 +273,8 @@ HTML_TEMPLATE = '''
                         btn.disabled = false;
                         btn.textContent = '📧 今すぐスキャン';
                     }
+                    // エラー時も結果を復元
+                    location.reload();
                 });
         }
     </script>
